@@ -1,0 +1,2 @@
+This directory stores the long-term memory databases.
+Each character will have its own subdirectory with a SQLite database and Zarr embeddings.

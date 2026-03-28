@@ -61,7 +61,8 @@ def get_input():
     global GAME_PATH, WEBUI_PATH, USE_TTS, LAUNCH_YOURSELF, LAUNCH_YOURSELF_WEBUI
     global USE_ACTIONS, USE_EMOTIONS, TTS_MODEL, USE_SPEECH_RECOGNITION
     global VOICE_SAMPLE_TORTOISE, VOICE_SAMPLE_COQUI, BACKEND_TYPE, ST_PATH, LAUNCH_YOURSELF_ST
-    
+    global USE_LTM
+
     USE_TTS = use_tts.get()
     GAME_PATH = game_path.get()
     WEBUI_PATH = webui_path.get() if backend_choice.get() == "Text-gen-webui" else ""
@@ -71,6 +72,7 @@ def get_input():
     LAUNCH_YOURSELF_ST = launch_yourself_ST.get() if backend_choice.get() == "SillyTavern" else False
     USE_ACTIONS = use_actions.get()
     USE_EMOTIONS = use_emotions.get() # Capture the new value
+    USE_LTM = use_ltm.get()
     TTS_MODEL = tts_model.get()
     USE_SPEECH_RECOGNITION = use_speech_recognition.get()
     VOICE_SAMPLE_TORTOISE = voice_sample_tortoise.get()
@@ -126,6 +128,7 @@ launch_yourself_webui = tk.StringVar()
 launch_yourself_ST = tk.StringVar()
 use_actions = tk.StringVar()
 use_emotions = tk.StringVar() # Variable for the new option
+use_ltm = tk.StringVar() # Variable for Long Term Memory
 tts_model = tk.StringVar()
 use_speech_recognition = tk.StringVar()
 voice_sample_tortoise = tk.StringVar()  
@@ -136,11 +139,12 @@ tk.Label(other_frame, text="Game Path", bg=menu_background_pink, fg='white', fon
 tk.Label(other_frame, text="Launch Yourself", bg=menu_background_pink, fg='white', font=bold_font).grid(row=1, column=3)
 tk.Label(other_frame, text="Use Actions", bg=menu_background_pink, fg='white', font=bold_font).grid(row=3, column=0)
 tk.Label(other_frame, text="Use Emotions", bg=menu_background_pink, fg='white', font=bold_font).grid(row=4, column=0) # New Label
-tk.Label(other_frame, text="Use TTS", bg=menu_background_pink, fg='white', font=bold_font).grid(row=5, column=0)
-tk.Label(other_frame, text="TTS model", bg=menu_background_pink, fg='white', font=bold_font).grid(row=5, column=3)
-tk.Label(other_frame, text="Use Speech Recognition", bg=menu_background_pink, fg='white', font=bold_font).grid(row=6, column=0)
-tk.Label(other_frame, text="Tortoise Voice Sample", bg=menu_background_pink, fg='white', font=bold_font).grid(row=7, column=0)
-tk.Label(other_frame, text="Voice Sample", bg=menu_background_pink, fg='white', font=bold_font).grid(row=7, column=3)
+tk.Label(other_frame, text="Use Long Term Memory", bg=menu_background_pink, fg='white', font=bold_font).grid(row=5, column=0)
+tk.Label(other_frame, text="Use TTS", bg=menu_background_pink, fg='white', font=bold_font).grid(row=6, column=0)
+tk.Label(other_frame, text="TTS model", bg=menu_background_pink, fg='white', font=bold_font).grid(row=6, column=3)
+tk.Label(other_frame, text="Use Speech Recognition", bg=menu_background_pink, fg='white', font=bold_font).grid(row=7, column=0)
+tk.Label(other_frame, text="Tortoise Voice Sample", bg=menu_background_pink, fg='white', font=bold_font).grid(row=8, column=0)
+tk.Label(other_frame, text="Voice Sample", bg=menu_background_pink, fg='white', font=bold_font).grid(row=8, column=3)
 
 tk.Radiobutton(other_frame, text="Yes", variable=launch_yourself, value=True, **aspect_params).grid(row=1, column=4)
 tk.Radiobutton(other_frame, text="No", variable=launch_yourself, value=False, **aspect_params).grid(row=1, column=5)
@@ -152,11 +156,15 @@ tk.Radiobutton(other_frame, text="No", variable=use_actions, value=False, **aspe
 tk.Radiobutton(other_frame, text="Yes", variable=use_emotions, value=True, **aspect_params).grid(row=4, column=1)
 tk.Radiobutton(other_frame, text="No", variable=use_emotions, value=False, **aspect_params).grid(row=4, column=2)
 
-tk.Radiobutton(other_frame, text="Yes", variable=use_tts, value=True, **aspect_params).grid(row=5, column=1)
-tk.Radiobutton(other_frame, text="No", variable=use_tts, value=False, **aspect_params).grid(row=5, column=2)
+# Radio Buttons for Long Term Memory
+tk.Radiobutton(other_frame, text="Yes", variable=use_ltm, value=True, **aspect_params).grid(row=5, column=1)
+tk.Radiobutton(other_frame, text="No", variable=use_ltm, value=False, **aspect_params).grid(row=5, column=2)
 
-tk.Radiobutton(other_frame, text="Yes", variable=use_speech_recognition, value=True, **aspect_params).grid(row=6, column=1)
-tk.Radiobutton(other_frame, text="No", variable=use_speech_recognition, value=False, **aspect_params).grid(row=6, column=2)
+tk.Radiobutton(other_frame, text="Yes", variable=use_tts, value=True, **aspect_params).grid(row=6, column=1)
+tk.Radiobutton(other_frame, text="No", variable=use_tts, value=False, **aspect_params).grid(row=6, column=2)
+
+tk.Radiobutton(other_frame, text="Yes", variable=use_speech_recognition, value=True, **aspect_params).grid(row=7, column=1)
+tk.Radiobutton(other_frame, text="No", variable=use_speech_recognition, value=False, **aspect_params).grid(row=7, column=2)
 
 # Text-gen-webui specific options
 webui_path_label = tk.Label(other_frame, text="WebUI Path", bg=menu_background_pink, fg='white', font=bold_font)
@@ -192,14 +200,14 @@ load_from_json("ST_PATH", ST_path_entry)
 
 tts_menu = tk.OptionMenu(other_frame, tts_model, "Your TTS", "XTTS", "Tortoise TTS")
 tts_menu.config(bg=doki_white, fg='black')
-tts_menu.grid(row=5, column=4) # Adjusted row
+tts_menu.grid(row=6, column=4) # Adjusted row
 
 # Voice sample selections
 all_voices_tortoise = os.listdir("tortoise_audios")
 all_voices_tortoise = [x for x in all_voices_tortoise if not x.endswith(".txt")]
 voice_menu = tk.OptionMenu(other_frame, voice_sample_tortoise, *all_voices_tortoise)
 voice_menu.config(bg=doki_white, fg='black')
-voice_menu.grid(row=8, column=1) # Adjusted row
+voice_menu.grid(row=9, column=1) # Adjusted row
 
 all_voices_coquiai = os.listdir("coquiai_audios")
 all_voices_coquiai = [x for x in all_voices_coquiai if x.endswith(".wav")]
@@ -207,7 +215,7 @@ if len(all_voices_coquiai) == 0:
     all_voices_coquiai = ["No voices found"]
 voice_menu = tk.OptionMenu(other_frame, voice_sample_coqui, *all_voices_coquiai)
 voice_menu.config(bg=doki_white, fg='black')
-voice_menu.grid(row=8, column=4) # Adjusted row
+voice_menu.grid(row=9, column=4) # Adjusted row
 
 aspect_params = {
     "bg": menu_background_pink,
@@ -232,6 +240,7 @@ if not os.path.exists("config.json"):
     use_tts.set(False)
     use_actions.set(False)
     use_emotions.set(False) # Default for new option
+    use_ltm.set(False) # Default for Long Term Memory
     tts_model.set("Your TTS")
     use_speech_recognition.set(False)
     voice_sample_tortoise.set("Choose a Tortoise voice sample")
@@ -250,6 +259,7 @@ else:
     LAUNCH_YOURSELF_ST = config.get("LAUNCH_YOURSELF_ST", False)
     USE_ACTIONS = config.get("USE_ACTIONS", False)
     USE_EMOTIONS = config.get("USE_EMOTIONS", False) # Load new option
+    USE_LTM = config.get("USE_LTM", False) # Load Long Term Memory option
     TTS_MODEL = config.get("TTS_MODEL", "Your TTS")
     USE_SPEECH_RECOGNITION = config.get("USE_SPEECH_RECOGNITION", False)
     VOICE_SAMPLE_COQUI = config.get("VOICE_SAMPLE_COQUI", "Choose a voice sample")
@@ -262,6 +272,7 @@ else:
     use_tts.set(USE_TTS)
     use_actions.set(USE_ACTIONS)
     use_emotions.set(USE_EMOTIONS) # Set GUI for new option
+    use_ltm.set(USE_LTM) # Set GUI for Long Term Memory
     tts_model.set(TTS_MODEL)
     use_speech_recognition.set(USE_SPEECH_RECOGNITION)
     voice_sample_tortoise.set(VOICE_SAMPLE_TORTOISE)
@@ -281,6 +292,7 @@ LAUNCH_YOURSELF_WEBUI = int(eval(str(LAUNCH_YOURSELF_WEBUI)))
 LAUNCH_YOURSELF_ST = int(eval(str(LAUNCH_YOURSELF_ST)))
 USE_ACTIONS = int(eval(str(USE_ACTIONS)))
 USE_EMOTIONS = int(eval(str(USE_EMOTIONS))) # Convert new option
+USE_LTM = int(eval(str(USE_LTM))) # Convert Long Term Memory option
 USE_SPEECH_RECOGNITION = int(eval(str(USE_SPEECH_RECOGNITION)))
 
 CONFIG = {
@@ -294,6 +306,7 @@ CONFIG = {
     "LAUNCH_YOURSELF_ST" : LAUNCH_YOURSELF_ST,
     "USE_ACTIONS": USE_ACTIONS,
     "USE_EMOTIONS": USE_EMOTIONS, # Add to config dict
+    "USE_LTM": USE_LTM, # Add Long Term Memory to config dict
     "TTS_MODEL": TTS_MODEL,
     "USE_SPEECH_RECOGNITION": USE_SPEECH_RECOGNITION,
     "VOICE_SAMPLE_TORTOISE": VOICE_SAMPLE_TORTOISE,

@@ -408,6 +408,64 @@ init 5 python:
 
 define step = 0
 
+# --- LONG TERM MEMORY LABELS ---
+# These labels handle LTM commands sent from the settings menu buttons.
+# They send special commands to the server and display the response.
+
+label monikai_ltm_reload:
+    if monikai_no_server:
+        $ renpy.notify("Server not connected. Cannot reload memories.")
+        return
+    $ send_simple("chatbot/m")
+    $ clientSocket.send(bytes("ltm_reload/g0").encode("utf8"))
+    $ ltm_response = receiveMessage()
+    python:
+        ltm_parts = ltm_response.split("/g")
+        ltm_msg = ltm_parts[0]
+        # Strip emotion tags if present
+        if "|||" in ltm_msg:
+            ltm_msg = ltm_msg.split("|||")[0]
+    $ renpy.notify(ltm_msg)
+    return
+
+label monikai_ltm_stats:
+    if monikai_no_server:
+        $ renpy.notify("Server not connected. Cannot get memory stats.")
+        return
+    $ send_simple("chatbot/m")
+    $ clientSocket.send(bytes("ltm_stats/g0").encode("utf8"))
+    $ ltm_response = receiveMessage()
+    python:
+        ltm_parts = ltm_response.split("/g")
+        ltm_msg = ltm_parts[0]
+        if "|||" in ltm_msg:
+            ltm_msg = ltm_msg.split("|||")[0]
+    $ renpy.notify(ltm_msg)
+    return
+
+label monikai_ltm_destroy_prompt:
+    if monikai_no_server:
+        $ renpy.notify("Server not connected. Cannot destroy memories.")
+        return
+    m 1esc "Are you sure you want to destroy all of my memories?"
+    m 1ekc "This is irreversible, [player]..."
+    menu:
+        "Yes, destroy all memories.":
+            m 2dkc "Alright... if that's what you want."
+            $ send_simple("chatbot/m")
+            $ clientSocket.send(bytes("ltm_destroy/g0").encode("utf8"))
+            $ ltm_response = receiveMessage()
+            python:
+                ltm_parts = ltm_response.split("/g")
+                ltm_msg = ltm_parts[0]
+                if "|||" in ltm_msg:
+                    ltm_msg = ltm_msg.split("|||")[0]
+            m 2eka "[ltm_msg]"
+            m 1hua "We can always make new memories together, [player]~"
+        "No, keep them.":
+            m 1hua "I'm glad you want me to keep our memories, [player]~"
+    return
+
 # Label for voice chat from the button in the main screen
 label monika_voice_chat:
     $ mas_RaiseShield_dlg()

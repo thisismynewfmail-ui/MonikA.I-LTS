@@ -1,5 +1,8 @@
 import os
 os.environ["COQUI_TOS_AGREED"] = "1"
+import json
+import pathlib
+import pprint
 import re
 import subprocess
 import torch
@@ -37,6 +40,7 @@ TTS_MODEL = CONFIG["TTS_MODEL"]
 USE_SPEECH_RECOGNITION = CONFIG["USE_SPEECH_RECOGNITION"]
 VOICE_SAMPLE_COQUI = CONFIG["VOICE_SAMPLE_COQUI"]
 VOICE_SAMPLE_TORTOISE = CONFIG["VOICE_SAMPLE_TORTOISE"]
+USE_LTM = CONFIG.get("USE_LTM", False)
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -178,6 +182,118 @@ if USE_SPEECH_RECOGNITION:
     except Exception as e:
         print(f"Failed to initialize speech recognition: {e}")
         USE_SPEECH_RECOGNITION = False
+
+# --- LONG TERM MEMORY INITIALIZATION ---
+memory_database = None
+ltm_config = None
+
+if USE_LTM:
+    try:
+        from scripts.ltm.memory_database import LtmDatabase
+        from scripts.ltm.chat_parsing import clean_character_message as ltm_clean_message
+        from scripts.ltm.timestamp_parsing import get_time_difference_message
+
+        LTM_CONFIG_PATH = "ltm_config.json"
+        LTM_DATA_DIR = "./user_data/bot_memories/"
+
+        with open(LTM_CONFIG_PATH, "rt") as handle:
+            ltm_config = json.load(handle)
+
+        memory_database = LtmDatabase(
+            LTM_DATA_DIR,
+            num_memories_to_fetch=ltm_config["ltm_reads"]["num_memories_to_fetch"],
+        )
+
+        # Ensure Monika's character DB is loaded
+        memory_database.load_character_db_if_new("monika")
+
+        print()
+        print("-----------------------------------------")
+        print("LONG TERM MEMORY SYSTEM INITIALIZED")
+        print("-----------------------------------------")
+        print("Memories will only be visible to the bot during your NEXT session.")
+        print("This prevents the loaded memory from being flooded with messages")
+        print("from the current conversation. Use 'Force reload memories' to override.")
+        print("----------")
+        print("LTM CONFIG")
+        print("----------")
+        pprint.pprint(ltm_config)
+        print("-----------------------------------------")
+    except Exception as e:
+        print("WARNING: Failed to initialize Long Term Memory system: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        USE_LTM = False
+        memory_database = None
+        ltm_config = None
+else:
+    print("Long Term Memory system is disabled.")
+
+
+def ltm_build_memory_context(fetched_memories, name1, name2):
+    """Builds a memory context string from fetched memories for injection."""
+    if not ltm_config or not fetched_memories:
+        return None
+
+    memory_length_cutoff = ltm_config["ltm_reads"]["memory_length_cutoff_in_chars"]
+
+    memory_strs = []
+    for (fetched_memory, distance_score) in fetched_memories:
+        if fetched_memory and distance_score < ltm_config["ltm_reads"]["max_cosine_distance"]:
+            time_difference = get_time_difference_message(fetched_memory["timestamp"])
+            memory_str = ltm_config["ltm_context"]["memory_template"].format(
+                time_difference=time_difference,
+                memory_name=fetched_memory["name"],
+                memory_message=fetched_memory["message"][:memory_length_cutoff],
+            )
+            memory_strs.append(memory_str)
+
+    if not memory_strs:
+        return None
+
+    joined_memory_strs = "\n".join(memory_strs)
+    memory_context = ltm_config["ltm_context"]["memory_context_template"].format(
+        name1=name1,
+        name2=name2,
+        all_memories=joined_memory_strs,
+    )
+
+    print("------------------------------")
+    print("MEMORIES LOADED FOR CONTEXT")
+    print(joined_memory_strs)
+    print("------------------------------")
+    return memory_context
+
+
+def ltm_inject_memories(user_input, memory_context):
+    """Prepends memory context to the user's message for the AI to see."""
+    injection_location = ltm_config["ltm_context"]["injection_location"]
+    if injection_location == "BEFORE_NORMAL_CONTEXT":
+        return "[{memory_context}]\n\n{user_input}".format(
+            memory_context=memory_context.strip(),
+            user_input=user_input,
+        )
+    elif injection_location == "AFTER_NORMAL_CONTEXT_BUT_BEFORE_MESSAGES":
+        return "[{memory_context}]\n\n{user_input}".format(
+            memory_context=memory_context.strip(),
+            user_input=user_input,
+        )
+    return user_input
+
+
+def ltm_store_message(name, message):
+    """Stores a message to LTM if it meets the minimum length requirement."""
+    if not memory_database or not ltm_config:
+        return
+    min_length = ltm_config["ltm_writes"]["min_message_length"]
+    if len(message) >= min_length:
+        memory_database.add(name, message)
+        print("-----------------------")
+        print("NEW MEMORY SAVED to LTM")
+        print("name:", name)
+        print("message:", message[:100] + "..." if len(message) > 100 else message)
+        print("-----------------------")
+
 
 # --- HELPER FUNCTIONS ---
 def split_text_like_renpy(text):
@@ -465,10 +581,47 @@ def listenToClient(client):
                 log("[DEBUG] Setting socket back to blocking mode for normal operation.")
                 client.setblocking(True) # IMPORTANT: Return to blocking mode
 
+            # --- LONG TERM MEMORY: Handle LTM commands ---
+            if USE_LTM and memory_database and user_input.startswith("ltm_"):
+                ltm_response = ""
+                if user_input == "ltm_reload":
+                    ltm_response = memory_database.reload_embeddings_from_disk()
+                elif user_input == "ltm_stats":
+                    stats = memory_database.get_stats()
+                    ltm_response = "LTM Stats: {} memories in RAM, {} on disk (character: {})".format(
+                        stats["num_memories_in_ram"],
+                        stats["num_memories_on_disk"],
+                        stats["character"],
+                    )
+                elif user_input == "ltm_destroy":
+                    ltm_response = memory_database.destroy_all_memories()
+                else:
+                    ltm_response = "Unknown LTM command: {}".format(user_input)
+                print("LTM Command Response: {}".format(ltm_response))
+                processed_ltm_response = ltm_response + "|||neutral"
+                msg_to_send = processed_ltm_response.encode("utf-8") + b"/g" + b"normal_chat"
+                sendMessage(msg_to_send)
+                continue
+
+            # --- LONG TERM MEMORY: Query and inject memories ---
+            message_for_ai = user_input
+            if USE_LTM and memory_database:
+                try:
+                    fetched_memories = memory_database.query(user_input)
+                    memory_context = ltm_build_memory_context(
+                        fetched_memories, "Player", "Monika"
+                    )
+                    if memory_context:
+                        message_for_ai = ltm_inject_memories(user_input, memory_context)
+                        log("[DEBUG] Memory context injected into message.")
+                except Exception as e:
+                    print("WARNING: LTM query failed: {}".format(e))
+                    message_for_ai = user_input
+
             # Sending the message to the AI frontend
             try:
-                log(f"Sending to AI: \"{user_input}\"")
-                post_message(page, user_input)
+                log(f"Sending to AI: \"{message_for_ai}\"")
+                post_message(page, message_for_ai)
             except Exception as e:
                 log(f"[DEBUG] FATAL: Error while sending message to AI. Error: {e}")
                 sendMessage("server_error".encode("utf-8"))
@@ -522,6 +675,16 @@ def listenToClient(client):
                         else:
                             log("\n--- Emotion processing disabled. Skipping payload generation. ---\n")
                         
+                        # --- LONG TERM MEMORY: Store conversation ---
+                        if USE_LTM and memory_database and user_input != "QUIT":
+                            try:
+                                # Store the bot's response
+                                ltm_store_message("Monika", response_text)
+                                # Store the user's input
+                                ltm_store_message("Player", user_input)
+                            except Exception as e:
+                                print("WARNING: LTM storage failed: {}".format(e))
+
                         # --- Send final payload to game ---
                         if user_input != "QUIT":
                             # --- TEXT-TO-SPEECH (TTS) LOGIC ---

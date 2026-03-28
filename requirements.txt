@@ -5,3 +5,6 @@ torch
 torchvision
 torchaudio
 ipython
+scikit-learn
+sentence-transformers
+zarr

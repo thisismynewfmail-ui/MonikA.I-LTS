@@ -1,5 +1,7 @@
 define persistent._show_monikai_buttons = True
 define persistent._use_monikai_actions = False
+define persistent._use_monikai_ltm = True
+define persistent._ltm_destroy_confirm = False
 
 # Setting in Menu to enable/disable the buttons
 screen monikai_chat_settings:
@@ -12,7 +14,7 @@ screen monikai_chat_settings:
 
         style_prefix "check"
 
-    
+
         textbutton "Show buttons":
             selected persistent._show_monikai_buttons
             action ToggleField(persistent, "_show_monikai_buttons")
@@ -30,6 +32,47 @@ screen monikai_chat_settings:
                 tooltip,
                 "value",
                 "Enable Monika to take actions from the chat."
+            )
+            unhovered SetField(tooltip, "value", tooltip.default)
+
+        null height 10
+
+        text "Long Term Memory" style "check_text"
+
+        textbutton "Enable Long Term Memory":
+            selected persistent._use_monikai_ltm
+            action ToggleField(persistent, "_use_monikai_ltm")
+            hovered SetField(
+                tooltip,
+                "value",
+                "Enable long term memory storage and retrieval. Monika will remember past conversations."
+            )
+            unhovered SetField(tooltip, "value", tooltip.default)
+
+        textbutton "Force reload memories":
+            action Function(renpy.call_in_new_context, "monikai_ltm_reload")
+            hovered SetField(
+                tooltip,
+                "value",
+                "Force reload memories from disk. Normally memories from the current session are only visible next session."
+            )
+            unhovered SetField(tooltip, "value", tooltip.default)
+
+        textbutton "View memory statistics":
+            action Function(renpy.call_in_new_context, "monikai_ltm_stats")
+            hovered SetField(
+                tooltip,
+                "value",
+                "View current long term memory statistics (memories in RAM, on disk, etc.)."
+            )
+            unhovered SetField(tooltip, "value", tooltip.default)
+
+        textbutton "Destroy all memories":
+            action Function(renpy.call_in_new_context, "monikai_ltm_destroy_prompt")
+            hovered SetField(
+                tooltip,
+                "value",
+                "WARNING: Permanently delete ALL stored memories. This cannot be undone!"
             )
             unhovered SetField(tooltip, "value", tooltip.default)
 
