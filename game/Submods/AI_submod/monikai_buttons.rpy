@@ -1,7 +1,7 @@
 define persistent._show_monikai_buttons = True
 define persistent._use_monikai_actions = False
-define persistent._use_monikai_ltm = True
-define persistent._ltm_destroy_confirm = False
+define persistent._use_monikai_ltm_injection = True
+define persistent._use_monikai_ltm_saving = True
 
 # Setting in Menu to enable/disable the buttons
 screen monikai_chat_settings:
@@ -13,7 +13,6 @@ screen monikai_chat_settings:
         xmaximum 800
 
         style_prefix "check"
-
 
         textbutton "Show buttons":
             selected persistent._show_monikai_buttons
@@ -39,13 +38,23 @@ screen monikai_chat_settings:
 
         text "Long Term Memory" style "check_text"
 
-        textbutton "Enable Long Term Memory":
-            selected persistent._use_monikai_ltm
-            action ToggleField(persistent, "_use_monikai_ltm")
+        textbutton "Enable memory injection":
+            selected persistent._use_monikai_ltm_injection
+            action ToggleField(persistent, "_use_monikai_ltm_injection")
             hovered SetField(
                 tooltip,
                 "value",
-                "Enable long term memory storage and retrieval. Monika will remember past conversations."
+                "Inject relevant past memories into Monika's context. Memories from the current session are NOT used until reloaded or next session."
+            )
+            unhovered SetField(tooltip, "value", tooltip.default)
+
+        textbutton "Enable memory saving":
+            selected persistent._use_monikai_ltm_saving
+            action ToggleField(persistent, "_use_monikai_ltm_saving")
+            hovered SetField(
+                tooltip,
+                "value",
+                "Save new conversations to Monika's long term memory for future sessions."
             )
             unhovered SetField(tooltip, "value", tooltip.default)
 
@@ -54,7 +63,7 @@ screen monikai_chat_settings:
             hovered SetField(
                 tooltip,
                 "value",
-                "Force reload memories from disk. Normally memories from the current session are only visible next session."
+                "Reload memories from disk into RAM. Makes memories saved this session available for injection immediately."
             )
             unhovered SetField(tooltip, "value", tooltip.default)
 
@@ -63,7 +72,7 @@ screen monikai_chat_settings:
             hovered SetField(
                 tooltip,
                 "value",
-                "View current long term memory statistics (memories in RAM, on disk, etc.)."
+                "View current memory statistics: memories loaded in RAM, saved to disk, and last injected."
             )
             unhovered SetField(tooltip, "value", tooltip.default)
 

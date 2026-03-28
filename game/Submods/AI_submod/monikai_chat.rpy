@@ -329,6 +329,16 @@ init 5 python:
     def send_simple(prefix):
         clientSocket.send(bytes(prefix).encode("utf8"))
 
+    def send_ltm_prefix():
+        """Sends the chatbot prefix with current LTM toggle flags.
+        Format: chatbot_LI{0|1}_LS{0|1}/m
+        LI = LTM Injection enabled, LS = LTM Saving enabled.
+        Server parses these to decide whether to query/inject and store memories.
+        """
+        li = "1" if persistent._use_monikai_ltm_injection else "0"
+        ls = "1" if persistent._use_monikai_ltm_saving else "0"
+        send_simple("chatbot_LI" + li + "_LS" + ls + "/m")
+
     def audio_file_exists(filename):
         return os.path.isfile(filename)
 
@@ -401,6 +411,12 @@ init 5 python:
 
     if persistent._use_monikai_actions == None:
         persistent._use_monikai_actions = True
+
+    if persistent._use_monikai_ltm_injection == None:
+        persistent._use_monikai_ltm_injection = True
+
+    if persistent._use_monikai_ltm_saving == None:
+        persistent._use_monikai_ltm_saving = True
 
     if persistent._show_monikai_buttons:
         AIButton()
@@ -484,7 +500,7 @@ label monika_voice_chat:
         m 5tubfb "Sure [player], talk to me as much as you want."
 
     while True:
-        $ send_simple("chatbot/m")
+        $ send_ltm_prefix()
         # Continue to speak or not
         if step > 0:
             m 6wubla "Can I hear your voice again?"
@@ -529,7 +545,7 @@ label monika_chatting_text:
         m 4hubfb "Oh and if you have to do something else, just write 'QUIT'. I'll understand my love."
 
     while True:
-        $ send_simple("chatbot/m")
+        $ send_ltm_prefix()
         $ my_msg = sendMessage("Chat with [monikaNickname]:",str(step))
         $ step += 1
         if my_msg in ["QUIT", "EXIT", "STOP", "END", "LEAVE"]:
@@ -576,7 +592,7 @@ label monika_chatting():
             $ useVoice = False
 
     while True:
-        $ send_simple("chatbot/m")
+        $ send_ltm_prefix()
         if useVoice:
             if step > 0:
                 m 6wubla "Can I hear your voice again?"

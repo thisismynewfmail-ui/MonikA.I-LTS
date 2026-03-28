@@ -139,7 +139,7 @@ tk.Label(other_frame, text="Game Path", bg=menu_background_pink, fg='white', fon
 tk.Label(other_frame, text="Launch Yourself", bg=menu_background_pink, fg='white', font=bold_font).grid(row=1, column=3)
 tk.Label(other_frame, text="Use Actions", bg=menu_background_pink, fg='white', font=bold_font).grid(row=3, column=0)
 tk.Label(other_frame, text="Use Emotions", bg=menu_background_pink, fg='white', font=bold_font).grid(row=4, column=0) # New Label
-tk.Label(other_frame, text="Use Long Term Memory", bg=menu_background_pink, fg='white', font=bold_font).grid(row=5, column=0)
+tk.Label(other_frame, text="Enable Long Term Memory", bg=menu_background_pink, fg='white', font=bold_font).grid(row=5, column=0)
 tk.Label(other_frame, text="Use TTS", bg=menu_background_pink, fg='white', font=bold_font).grid(row=6, column=0)
 tk.Label(other_frame, text="TTS model", bg=menu_background_pink, fg='white', font=bold_font).grid(row=6, column=3)
 tk.Label(other_frame, text="Use Speech Recognition", bg=menu_background_pink, fg='white', font=bold_font).grid(row=7, column=0)

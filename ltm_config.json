@@ -1,7 +1,7 @@
 {
     "ltm_context": {
         "injection_location": "BEFORE_NORMAL_CONTEXT",
-        "memory_context_template": "{name2}'s memory log:\n{all_memories}\nDuring conversations between {name1} and {name2}, {name2} will try to remember the memories described above and naturally integrate them with the conversation.",
+        "memory_context_template": "Monika's memory log from past conversations with {name1}:\n{all_memories}\nMonika should try to naturally recall and reference these memories when relevant to the current conversation with {name1}.",
         "memory_template": "{time_difference}, {memory_name} said:\n\"{memory_message}\""
     },
     "ltm_writes": {

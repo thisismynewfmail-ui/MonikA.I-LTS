@@ -187,6 +187,12 @@ if USE_SPEECH_RECOGNITION:
 memory_database = None
 ltm_config = None
 
+# Debug state tracking for LTM (mirrors reference project's debug_texts)
+ltm_debug = {
+    "current_memory_text": "(None)",
+    "num_memories_loaded": 0,
+}
+
 if USE_LTM:
     try:
         from scripts.ltm.memory_database import LtmDatabase
@@ -211,9 +217,9 @@ if USE_LTM:
         print("-----------------------------------------")
         print("LONG TERM MEMORY SYSTEM INITIALIZED")
         print("-----------------------------------------")
-        print("Memories will only be visible to the bot during your NEXT session.")
-        print("This prevents the loaded memory from being flooded with messages")
-        print("from the current conversation. Use 'Force reload memories' to override.")
+        print("Memories from PAST sessions are loaded into RAM for injection.")
+        print("New memories saved THIS session will NOT be injected until")
+        print("the next session, unless you press 'Force reload memories'.")
         print("----------")
         print("LTM CONFIG")
         print("----------")
@@ -231,13 +237,20 @@ else:
 
 
 def ltm_build_memory_context(fetched_memories, name1, name2):
-    """Builds a memory context string from fetched memories for injection."""
+    """Builds a memory context string from fetched memories for injection.
+
+    Tracks debug state: which memories were loaded and how many.
+    Only memories within the max_cosine_distance threshold are used.
+    """
     if not ltm_config or not fetched_memories:
         return None
 
     memory_length_cutoff = ltm_config["ltm_reads"]["memory_length_cutoff_in_chars"]
 
     memory_strs = []
+    distance_scores = []
+    ltm_debug["current_memory_text"] = "(None)"
+    ltm_debug["num_memories_loaded"] = 0
     for (fetched_memory, distance_score) in fetched_memories:
         if fetched_memory and distance_score < ltm_config["ltm_reads"]["max_cosine_distance"]:
             time_difference = get_time_difference_message(fetched_memory["timestamp"])
@@ -247,6 +260,7 @@ def ltm_build_memory_context(fetched_memories, name1, name2):
                 memory_message=fetched_memory["message"][:memory_length_cutoff],
             )
             memory_strs.append(memory_str)
+            distance_scores.append(distance_score)
 
     if not memory_strs:
         return None
@@ -258,9 +272,14 @@ def ltm_build_memory_context(fetched_memories, name1, name2):
         all_memories=joined_memory_strs,
     )
 
+    # Update debug state
+    ltm_debug["current_memory_text"] = joined_memory_strs
+    ltm_debug["num_memories_loaded"] = len(memory_strs)
+
     print("------------------------------")
-    print("MEMORIES LOADED FOR CONTEXT")
-    print(joined_memory_strs)
+    print("NEW MEMORIES LOADED IN CHATBOT")
+    pprint.pprint(joined_memory_strs)
+    print("scores (in order)", distance_scores)
     print("------------------------------")
     return memory_context
 
@@ -293,6 +312,22 @@ def ltm_store_message(name, message):
         print("name:", name)
         print("message:", message[:100] + "..." if len(message) > 100 else message)
         print("-----------------------")
+
+
+def parse_ltm_flags(prefix):
+    """Parses LTM injection/saving flags from the chatbot prefix.
+
+    Prefix format: 'chatbot_LI{0|1}_LS{0|1}' or plain 'chatbot'.
+    Returns (injection_enabled, saving_enabled) as booleans.
+    Defaults to (True, True) if no flags are present.
+    """
+    injection_enabled = True
+    saving_enabled = True
+    if "LI" in prefix:
+        injection_enabled = "LI1" in prefix
+    if "LS" in prefix:
+        saving_enabled = "LS1" in prefix
+    return (injection_enabled, saving_enabled)
 
 
 # --- HELPER FUNCTIONS ---
@@ -497,8 +532,11 @@ def listenToClient(client):
         log(f"[DEBUG] After splitting '/m': received_msg is \"{received_msg}\", rest_msg is \"{rest_msg}\"")
 
 
-        if received_msg == "chatbot":
+        if received_msg.startswith("chatbot"):
             log("[DEBUG] 'chatbot' identifier found. Entering chatbot logic.")
+
+            # Parse LTM flags from prefix (e.g. "chatbot_LI1_LS0")
+            ltm_injection_on, ltm_saving_on = parse_ltm_flags(received_msg)
             main_message_body = rest_msg
             
             # This loop ensures we get the part of the message with the user input
@@ -588,13 +626,17 @@ def listenToClient(client):
                     ltm_response = memory_database.reload_embeddings_from_disk()
                 elif user_input == "ltm_stats":
                     stats = memory_database.get_stats()
-                    ltm_response = "LTM Stats: {} memories in RAM, {} on disk (character: {})".format(
+                    ltm_response = "{} memories seen by bot | {} in RAM | {} on disk | character: {}".format(
+                        ltm_debug["num_memories_loaded"],
                         stats["num_memories_in_ram"],
                         stats["num_memories_on_disk"],
                         stats["character"],
                     )
                 elif user_input == "ltm_destroy":
                     ltm_response = memory_database.destroy_all_memories()
+                    # Reset debug state after destroy
+                    ltm_debug["current_memory_text"] = "(None)"
+                    ltm_debug["num_memories_loaded"] = 0
                 else:
                     ltm_response = "Unknown LTM command: {}".format(user_input)
                 print("LTM Command Response: {}".format(ltm_response))
@@ -604,8 +646,11 @@ def listenToClient(client):
                 continue
 
             # --- LONG TERM MEMORY: Query and inject memories ---
+            # Only queries memories from PAST sessions (message_embeddings loaded at init).
+            # New memories saved this session are on disk but NOT in message_embeddings
+            # until reload_embeddings_from_disk() is called (Force Reload button).
             message_for_ai = user_input
-            if USE_LTM and memory_database:
+            if USE_LTM and memory_database and ltm_injection_on:
                 try:
                     fetched_memories = memory_database.query(user_input)
                     memory_context = ltm_build_memory_context(
@@ -676,7 +721,9 @@ def listenToClient(client):
                             log("\n--- Emotion processing disabled. Skipping payload generation. ---\n")
                         
                         # --- LONG TERM MEMORY: Store conversation ---
-                        if USE_LTM and memory_database and user_input != "QUIT":
+                        # Saves to disk only; NOT visible for injection until
+                        # next session or Force Reload.
+                        if USE_LTM and memory_database and ltm_saving_on and user_input != "QUIT":
                             try:
                                 # Store the bot's response
                                 ltm_store_message("Monika", response_text)
